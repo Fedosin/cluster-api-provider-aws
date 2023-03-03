@@ -215,22 +215,6 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(ctx context.Context, machineP
 		return ctrl.Result{}, nil
 	}
 
-	// Make sure bootstrap data is available and populated
-	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
-		machinePoolScope.Info("Bootstrap data secret reference is not yet available")
-		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
-		return ctrl.Result{}, nil
-	}
-
-	if err := r.reconcileLaunchTemplate(machinePoolScope, ec2Scope); err != nil {
-		r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeWarning, "FailedLaunchTemplateReconcile", "Failed to reconcile launch template: %v", err)
-		machinePoolScope.Error(err, "failed to reconcile launch template")
-		return ctrl.Result{}, err
-	}
-
-	// set the LaunchTemplateReady condition
-	conditions.MarkTrue(machinePoolScope.AWSMachinePool, expinfrav1.LaunchTemplateReadyCondition)
-
 	// Initialize ASG client
 	asgsvc := r.getASGService(clusterScope)
 
@@ -262,6 +246,22 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(ctx context.Context, machineP
 			}
 		}
 	}
+
+	// Make sure bootstrap data is available and populated
+	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
+		machinePoolScope.Info("Bootstrap data secret reference is not yet available")
+		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
+		return ctrl.Result{}, nil
+	}
+
+	if err := r.reconcileLaunchTemplate(machinePoolScope, ec2Scope); err != nil {
+		r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeWarning, "FailedLaunchTemplateReconcile", "Failed to reconcile launch template: %v", err)
+		machinePoolScope.Error(err, "failed to reconcile launch template")
+		return ctrl.Result{}, err
+	}
+
+	// set the LaunchTemplateReady condition
+	conditions.MarkTrue(machinePoolScope.AWSMachinePool, expinfrav1.LaunchTemplateReadyCondition)
 
 	if err := r.updatePool(machinePoolScope, clusterScope, asg); err != nil {
 		machinePoolScope.Error(err, "error updating AWSMachinePool")
